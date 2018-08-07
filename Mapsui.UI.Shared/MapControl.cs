@@ -58,6 +58,7 @@ namespace Mapsui.UI.Wpf
         public INavigator Navigator { get; private set; }
 
         public event EventHandler ViewportInitialized; //todo: Consider to use the Viewport PropertyChanged
+		public event PropertyChangedEventHandler ViewportChanged;
 
         /// <summary>
         ///  Called whenever a feature in one of the layers in InfoLayers is hitten by a click 

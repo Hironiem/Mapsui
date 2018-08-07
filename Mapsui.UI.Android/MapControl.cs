@@ -65,6 +65,13 @@ namespace Mapsui.UI.Android
             _gestureDetector = new GestureDetector(Context, new GestureDetector.SimpleOnGestureListener());
             _gestureDetector.SingleTapConfirmed += OnSingleTapped;
             _gestureDetector.DoubleTap += OnDoubleTapped;
+
+            _viewport.ViewportChanged += OnViewportChanged;
+        }
+
+        private void OnViewportChanged(object sender, PropertyChangedEventArgs e)
+        {
+            ViewportChanged.Invoke(sender, e);
         }
 
         public float PixelDensity => Resources.DisplayMetrics.Density;
