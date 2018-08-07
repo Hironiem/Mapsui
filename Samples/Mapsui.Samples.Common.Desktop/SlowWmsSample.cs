@@ -1,4 +1,5 @@
-﻿using Mapsui.Layers;
+﻿using Mapsui.Geometries;
+using Mapsui.Layers;
 using Mapsui.Providers.Wms;
 using Mapsui.Utilities;
 
@@ -11,6 +12,7 @@ namespace Mapsui.Samples.Common.Desktop
             var map = new Map();
             map.Layers.Add(OpenStreetMap.CreateTileLayer());
             map.Layers.Add(CreateLayer());
+            map.Home = n => n.NavigateTo(new Point(1031709.38634765, 7507541.80851409), 10);
             return map;
         }
 

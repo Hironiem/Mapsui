@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Mapsui.Logging;
 using Mapsui.Samples.Common.Desktop;
+using Mapsui.Samples.CustomWidget;
 using Mapsui.Samples.Wpf.Utilities;
 using Mapsui.Tests.Common;
 using Mapsui.UI;
@@ -19,12 +20,12 @@ namespace Mapsui.Samples.Wpf
         public Window1()
         {
             InitializeComponent();
-            MapControl.ErrorMessageChanged += MapErrorMessageChanged;
             MapControl.FeatureInfo += MapControlFeatureInfo;
             MapControl.MouseMove += MapControlOnMouseMove;
             MapControl.RotationLock = false;
             MapControl.UnSnapRotationDegrees = 30;
             MapControl.ReSnapRotationDegrees = 5;
+            MapControl.Renderer.WidgetRenders[typeof(CustomWidget.CustomWidget)] = new CustomWidgetSkiaRenderer();
 
             Logger.LogDelegate += LogMethod;
 
@@ -36,12 +37,7 @@ namespace Mapsui.Samples.Wpf
             firstRadioButton.IsChecked = true;
             firstRadioButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
-
-        private void MapControlOnHover(object sender, MapInfoEventArgs args)
-        {
-            FeatureInfo.Text = args.MapInfo.Feature == null ? "" : $"Hover Info:{Environment.NewLine}{args.MapInfo.Feature.ToDisplayText()}";
-        }
-
+        
         private void RenderModeOnSelectionChanged(object sender, SelectionChangedEventArgs selectionChangedEventArgs)
         {
             var selectedValue = ((ComboBoxItem)((ComboBox)sender).SelectedItem).Content.ToString();
@@ -57,7 +53,7 @@ namespace Mapsui.Samples.Wpf
         private void MapControlOnMouseMove(object sender, MouseEventArgs e)
         {
             var screenPosition = e.GetPosition(MapControl);
-            var worldPosition = MapControl.Map.Viewport.ScreenToWorld(screenPosition.X, screenPosition.Y);
+            var worldPosition = MapControl.Viewport.ScreenToWorld(screenPosition.X, screenPosition.Y);
             MouseCoordinates.Text = $"{worldPosition.X:F0}, {worldPosition.Y:F0}";
         }
 
@@ -128,8 +124,7 @@ namespace Mapsui.Samples.Wpf
             {
                 MapControl.Map.Layers.Clear();
                 MapControl.Map = sample.Value();
-                MapControl.Map.Info += MapControlOnInfo;
-                MapControl.Map.Hover += MapControlOnHover;
+                MapControl.Info += MapControlOnInfo;
                 LayerList.Initialize(MapControl.Map.Layers);
             };
             return radioButton;
@@ -161,16 +156,11 @@ namespace Mapsui.Samples.Wpf
         {
             MessageBox.Show(e.FeatureInfo.ToDisplayText());
         }
-
-        private void MapErrorMessageChanged(object sender, EventArgs e)
-        {
-            LogTextBox.Text = MapControl.ErrorMessage; // todo: keep history
-        }
-
+        
         private void RotationSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             var percent = RotationSlider.Value / (RotationSlider.Maximum - RotationSlider.Minimum);
-            MapControl.Map.Viewport.Rotation = percent * 360;
+            MapControl.Navigator.RotateTo(percent * 360);
             MapControl.Refresh();
         }
 

@@ -15,13 +15,14 @@ namespace Mapsui.Samples.Common
                 ["Simple Points"] = PointsSample.CreateMap,
                 ["Simple LineStrings"] = LineStringSample.CreateMap,
                 ["Simple Polygons"] = PolygonSample.CreateMap,
+                ["Complex Polygons"] = ComplexPolygonSample.CreateMap,
                 ["Various"] = VariousSample.CreateMap,
                 ["Labels"] = LabelsSample.CreateMap,
                 ["Center on location"] = CenterOnLocationSample.CreateMap,
                 ["Projected point"] = ProjectionSample.CreateMap,
                 ["Stacked labels"] = StackedLabelsSample.CreateMap,
                 ["Symbols"] = SymbolsSample.CreateMap,
-                ["Info"] = InfoLayersSample.CreateMap,
+                ["Map Info"] = InfoLayersSample.CreateMap,
                 ["MbTiles"] = MbTilesSample.CreateMap,
                 ["MbTiles Overlay"] = MbTilesOverlaySample.CreateMap,
                 ["Keep Within Extents"] = KeepWithinExtentsSample.CreateMap,
@@ -38,7 +39,8 @@ namespace Mapsui.Samples.Common
                 ["OpacityStyle"] = OpacityStyleSample.CreateMap,
                 ["Svg"] = SvgSample.CreateMap,
                 ["Atlas"] = AtlasSample.CreateMap,
-                ["Itinero routing"] = ItineroRoutingSample.CreateMap
+                ["Itinero routing"] = ItineroRoutingSample.CreateMap,
+                ["Custom Widget"] = CustomWidgetSample.CreateMap
             };
         }
     }

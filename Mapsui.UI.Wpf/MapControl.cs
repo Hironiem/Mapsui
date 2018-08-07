@@ -1,20 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Net;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-using Mapsui.Fetcher;
 using Mapsui.Layers;
 using Mapsui.Providers;
 using Mapsui.Rendering.Skia;
 using Mapsui.Utilities;
-using Mapsui.Widgets;
 using SkiaSharp.Views.Desktop;
 using SkiaSharp.Views.WPF;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
@@ -110,8 +107,6 @@ namespace Mapsui.UI.Wpf
 
         public bool ZoomToBoxMode { get; set; }
 
-        public string ErrorMessage { get; private set; }
-
         public Canvas WpfCanvas { get; } = CreateWpfRenderCanvas();
 
         private SKElement SkiaCanvas { get; } = CreateSkiaRenderElement();
@@ -121,7 +116,8 @@ namespace Mapsui.UI.Wpf
             get => _renderMode;
             set
             {
-                if (value == RenderMode.Skia)
+                _renderMode = value;
+                if (_renderMode == RenderMode.Skia)
                 {
                     WpfCanvas.Visibility = Visibility.Collapsed;
                     SkiaCanvas.Visibility = Visibility.Visible;
@@ -135,7 +131,6 @@ namespace Mapsui.UI.Wpf
                     Renderer = new Rendering.Xaml.MapRenderer();
                     RefreshGraphics();
                 }
-                _renderMode = value;
             }
         }
 
@@ -157,42 +152,14 @@ namespace Mapsui.UI.Wpf
             };
         }
 
-        public event EventHandler ErrorMessageChanged;
+        [Obsolete("Use Viewport.ViewportChanged", true)]
         public event EventHandler<ViewChangedEventArgs> ViewChanged;
-        public event EventHandler<FeatureInfoEventArgs> FeatureInfo;
-        public event EventHandler ViewportInitialized;
 
-        private void MapRefreshGraphics(object sender, EventArgs eventArgs)
-        {
-            RefreshGraphics();
-        }
-
-        private void MapPropertyChanged(object sender, PropertyChangedEventArgs e)
-        {
-            if (!Dispatcher.CheckAccess()) Dispatcher.BeginInvoke(new Action(() => MapPropertyChanged(sender, e)));
-            else
-            {
-                if (e.PropertyName == nameof(Layer.Enabled))
-                {
-                    RefreshGraphics();
-                }
-                else if (e.PropertyName == nameof(Layer.Opacity))
-                {
-                    RefreshGraphics();
-                }
-            }
-        }
-
-        private void OnViewChanged(bool userAction = false)
-        {
-            if (_map == null) return;
-
-            ViewChanged?.Invoke(this, new ViewChangedEventArgs { Viewport = Map.Viewport, UserAction = userAction });
-        }
+        public event EventHandler<FeatureInfoEventArgs> FeatureInfo; // todo: Remove and add sample for alternative
 
         public void RefreshGraphics()
         {
-            Dispatcher.BeginInvoke(new Action(InvalidateCanvas));
+            RunOnUIThread(InvalidateCanvas);
         }
 
         internal void InvalidateCanvas()
@@ -202,50 +169,11 @@ namespace Mapsui.UI.Wpf
 
         }
 
-        public void RefreshData()
-        {
-            _map?.RefreshData(true);
-        }
+        [Obsolete("Use Navigator.ZoomIn instead", true)]
+        public void ZoomIn() {}
 
-        public void Clear()
-        {
-            _map?.ClearCache();
-            RefreshGraphics();
-        }
-
-        public void ZoomIn()
-        {
-            if (ZoomLock)
-                return;
-
-            if (double.IsNaN(_toResolution))
-                _toResolution = Map.Viewport.Resolution;
-
-            var resolution = ZoomHelper.ZoomIn(_map.Resolutions, _toResolution);
-
-            _toResolution = ViewportLimiter.LimitResolution(resolution, ActualWidth, ActualHeight,
-                _map.ZoomMode, _map.ZoomLimits, _map.Resolutions, _map.Envelope);
-
-            ZoomMiddle();
-        }
-
-        public void ZoomOut()
-        {
-            if (double.IsNaN(_toResolution))
-                _toResolution = Map.Viewport.Resolution;
-
-            var resolution = ZoomHelper.ZoomOut(_map.Resolutions, _toResolution);
-
-            _toResolution = ViewportLimiter.LimitResolution(resolution, ActualWidth, ActualHeight,
-                _map.ZoomMode, _map.ZoomLimits, _map.Resolutions, _map.Envelope);
-
-            ZoomMiddle();
-        }
-
-        private void OnErrorMessageChanged(EventArgs e)
-        {
-            ErrorMessageChanged?.Invoke(this, e);
-        }
+        [Obsolete("Use Navigator.ZoomOut instead", true)]
+        public void ZoomOut() {}
 
         private static void OnResolutionChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
         {
@@ -257,41 +185,26 @@ namespace Mapsui.UI.Wpf
         {
             var current = _currentMousePosition;
 
-            Map.Viewport.Transform(current.X, current.Y, current.X, current.Y, Map.Viewport.Resolution / resolution);
+            _viewport.Transform(current.X, current.Y, current.X, current.Y, Viewport.Resolution / resolution);
 
-            ViewportLimiter.Limit(_map.Viewport, _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                _map.PanMode, _map.PanLimits, _map.Envelope);
+            ViewportLimiter.Limit(_viewport, _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions,
+                _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
 
-            _map.RefreshData(true);
-            OnViewChanged();
+            RefreshData(true); 
             RefreshGraphics();
-        }
-
-        private void ZoomMiddle()
-        {
-            _currentMousePosition = new Geometries.Point(ActualWidth / 2, ActualHeight / 2);
-            StartZoomAnimation(Map.Viewport.Resolution, _toResolution);
         }
 
         private void MapControlLoaded(object sender, RoutedEventArgs e)
         {
-            _scale = GetDeviceIndependentUnits();
-            TryInitializeViewport();
-            UpdateSize();
+            SetViewportSize();
+
             InitAnimation();
             Focusable = true;
         }
+        
+        public float PixelDensity => DeterminePixelDensity();
 
-        public float GetDeviceIndependentUnits()
-        {
-            if (RenderMode == RenderMode.Skia)
-            {
-                return DetermineSkiaScale();
-            }
-            return 1; // Scale is always 1 in WPF
-        }
-
-        private float DetermineSkiaScale()
+        private float DeterminePixelDensity()
         {
             var presentationSource = PresentationSource.FromVisual(this);
             if (presentationSource == null) throw new Exception("PresentationSource is null");
@@ -319,21 +232,21 @@ namespace Mapsui.UI.Wpf
 
         private void MapControlMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (!_map.Viewport.Initialized) return;
             if (ZoomLock) return;
+            if (!_viewport.IsSizeInitialized()) return;
 
             _currentMousePosition = e.GetPosition(this).ToMapsui();
             //Needed for both MouseMove and MouseWheel event for mousewheel event
 
             if (double.IsNaN(_toResolution))
-                _toResolution = Map.Viewport.Resolution;
+                _toResolution = Viewport.Resolution;
 
             if (e.Delta > Constants.Epsilon)
             {
                 var resolution = ZoomHelper.ZoomIn(_map.Resolutions, _toResolution);
 
                 _toResolution = ViewportLimiter.LimitResolution(resolution, ActualWidth, ActualHeight,
-                    _map.ZoomMode, _map.ZoomLimits, _map.Resolutions, _map.Envelope);
+                    _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions, _map.Envelope);
 
             }
             else if (e.Delta < Constants.Epsilon)
@@ -341,14 +254,15 @@ namespace Mapsui.UI.Wpf
                 var resolution = ZoomHelper.ZoomOut(_map.Resolutions, _toResolution);
 
                 _toResolution = ViewportLimiter.LimitResolution(resolution, ActualWidth, ActualHeight,
-                    _map.ZoomMode, _map.ZoomLimits, _map.Resolutions, _map.Envelope);
+                    _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions, _map.Envelope);
             }
 
-            // Some cheating for personal gain. This workaround could be ommitted if the zoom animations was on CenterX, CenterY and Resolution, not Resolution alone.
-            Map.Viewport.Center.X += 0.000000001;
-            Map.Viewport.Center.Y += 0.000000001;
+            // Some cheating to trigger a zoom animation if resolution does not change.
+            // This workaround could be ommitted if the zoom animations was on CenterX, CenterY and Resolution, not Resolution alone.
+            // todo: Remove this workaround once animations are centralized.
+            _viewport.SetCenter(_viewport.Center.X + 0.000000001, Viewport.Center.Y + 0.000000001);
 
-            StartZoomAnimation(Map.Viewport.Resolution, _toResolution);
+            StartZoomAnimation(Viewport.Resolution, _toResolution);
         }
 
         private void StartZoomAnimation(double begin, double end)
@@ -367,24 +281,8 @@ namespace Mapsui.UI.Wpf
 
         private void MapControlSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            TryInitializeViewport();
             Clip = new RectangleGeometry { Rect = new Rect(0, 0, ActualWidth, ActualHeight) };
-            UpdateSize();
-            _map.RefreshData(true);
-            OnViewChanged();
-            Refresh();
-        }
-
-        private void UpdateSize()
-        {
-            if (Map.Viewport != null)
-            {
-                Map.Viewport.Width = ActualWidth;
-                Map.Viewport.Height = ActualHeight;
-
-                ViewportLimiter.Limit(_map.Viewport, _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                    _map.PanMode, _map.PanLimits, _map.Envelope);
-            }
+            SetViewportSize();
         }
 
         private void MapControlMouseLeave(object sender, MouseEventArgs e)
@@ -393,38 +291,15 @@ namespace Mapsui.UI.Wpf
             ReleaseMouseCapture();
         }
 
-        public void MapDataChanged(object sender, DataChangedEventArgs e) // todo: make private?
+        private void RunOnUIThread(Action action)
         {
             if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.BeginInvoke(new DataChangedEventHandler(MapDataChanged), sender, e);
+                Dispatcher.BeginInvoke(action);
             }
             else
             {
-                if (e == null)
-                {
-                    ErrorMessage = "Unexpected error: DataChangedEventArgs can not be null";
-                    OnErrorMessageChanged(EventArgs.Empty);
-                }
-                else if (e.Cancelled)
-                {
-                    ErrorMessage = "Cancelled";
-                    OnErrorMessageChanged(EventArgs.Empty);
-                }
-                else if (e.Error is WebException)
-                {
-                    ErrorMessage = "WebException: " + e.Error.Message;
-                    OnErrorMessageChanged(EventArgs.Empty);
-                }
-                else if (e.Error != null)
-                {
-                    ErrorMessage = e.Error.GetType() + ": " + e.Error.Message;
-                    OnErrorMessageChanged(EventArgs.Empty);
-                }
-                else // no problems
-                {
-                    RefreshGraphics();
-                }
+                action();
             }
         }
 
@@ -442,8 +317,8 @@ namespace Mapsui.UI.Wpf
                 if (IsClick(_currentMousePosition, _downMousePosition))
                 {
                     HandleFeatureInfo(e);
-                    Map.InvokeInfo(touchPosition, _downMousePosition, 1, Renderer.SymbolCache,
-                        WidgetTouched, e.ClickCount);
+                    OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport, 
+                        touchPosition, _downMousePosition, Renderer.SymbolCache, WidgetTouched, e.ClickCount));
                 }
             }
         }
@@ -456,13 +331,12 @@ namespace Mapsui.UI.Wpf
             {
                 ZoomToBoxMode = false;
                 
-                var previous = Map.Viewport.ScreenToWorld(_previousMousePosition.X, _previousMousePosition.Y);
-                var current = Map.Viewport.ScreenToWorld(mousePosition.X, mousePosition.Y);
+                var previous = Viewport.ScreenToWorld(_previousMousePosition.X, _previousMousePosition.Y);
+                var current = Viewport.ScreenToWorld(mousePosition.X, mousePosition.Y);
                 ZoomToBox(previous, current);
             }
 
-            _map.RefreshData(true);
-            OnViewChanged(true);
+            RefreshData();
             _mouseDown = false;
 
             _previousMousePosition = new Geometries.Point();
@@ -483,19 +357,16 @@ namespace Mapsui.UI.Wpf
                 var touchPosition = e.GetTouchPoint(this).Position.ToMapsui();
                 // todo: Pass the touchDown position. It needs to be set at touch down.
 
-                // TODO Figure out how to do a number of taps for WPF
-                Map.InvokeInfo(touchPosition, touchPosition, 1, Renderer.SymbolCache, WidgetTouched, 1);
+                // todo: Figure out how to do a number of taps for WPF
+                OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport, 
+                    touchPosition, touchPosition, Renderer.SymbolCache, 
+                    WidgetTouched, 1));
             }
         }
 
-        private void WidgetTouched(IWidget widget, Geometries.Point screenPosition)
+        public void OpenBrowser(string url)
         {
-            if (widget is Hyperlink hyperlink)
-            {
-                Process.Start(hyperlink.Url);
-            }
-
-            widget.HandleWidgetTouched(screenPosition);
+            Process.Start(url);
         }
 
         private void HandleFeatureInfo(MouseButtonEventArgs e)
@@ -506,7 +377,7 @@ namespace Mapsui.UI.Wpf
                 foreach (var layer in Map.Layers)
                 {
                     // ReSharper disable once SuspiciousTypeConversion.Global
-                    (layer as IFeatureInfo)?.GetFeatureInfo(Map.Viewport, _downMousePosition.X, _downMousePosition.Y,
+                    (layer as IFeatureInfo)?.GetFeatureInfo(Viewport, _downMousePosition.X, _downMousePosition.Y,
                         OnFeatureInfo);
                 }
         }
@@ -524,8 +395,6 @@ namespace Mapsui.UI.Wpf
                 return;
             }
 
-            if (!_mouseDown) Map.InvokeHover(e.GetPosition(this).ToMapsui(), 1, Renderer.SymbolCache);
-
             if (_mouseDown && !PanLock)
             {
                 if (_previousMousePosition == null || _previousMousePosition.IsEmpty())
@@ -538,39 +407,18 @@ namespace Mapsui.UI.Wpf
 
                 _currentMousePosition = e.GetPosition(this).ToMapsui(); //Needed for both MouseMove and MouseWheel event
 
-                _map.Viewport.Transform(
+                _viewport.Transform(
                     _currentMousePosition.X, _currentMousePosition.Y,
                     _previousMousePosition.X, _previousMousePosition.Y);
 
-                ViewportLimiter.Limit(_map.Viewport, _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                    _map.PanMode, _map.PanLimits, _map.Envelope);
+                ViewportLimiter.Limit(_viewport, _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions,
+                    _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
 
                 _previousMousePosition = _currentMousePosition;
-                _map.RefreshData(false);
-                OnViewChanged(true);
+                RefreshData(false);
                 RefreshGraphics();
 
             }
-        }
-
-        private void TryInitializeViewport()
-        {
-            if (_map?.Viewport == null) return;
-            if (_map.Viewport.Initialized) return;
-
-            if (_map.Viewport.TryInitializeViewport(_map.Envelope, ActualWidth, ActualHeight))
-            {
-                ViewportLimiter.Limit(_map.Viewport, _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                    _map.PanMode, _map.PanLimits, _map.Envelope);
-
-                Map.RefreshData(true);
-                OnViewportInitialized();
-            }
-        }
-
-        private void OnViewportInitialized()
-        {
-            ViewportInitialized?.Invoke(this, EventArgs.Empty);
         }
 
         public void ZoomToBox(Geometries.Point beginPoint, Geometries.Point endPoint)
@@ -583,26 +431,22 @@ namespace Mapsui.UI.Wpf
             ZoomHelper.ZoomToBoudingbox(beginPoint.X, beginPoint.Y, endPoint.X, endPoint.Y,
                 ActualWidth, ActualHeight, out var x, out var y, out var resolution);
 
-            resolution = ViewportLimiter.LimitResolution(resolution, _map.Viewport.Width, _map.Viewport.Height,
-                _map.ZoomMode, _map.ZoomLimits, _map.Resolutions, _map.Envelope);
+            resolution = ViewportLimiter.LimitResolution(resolution, Viewport.Width, Viewport.Height,
+                _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions, _map.Envelope);
 
-            _map.Viewport.Resolution = resolution;
-            Map.Viewport.Center = new Geometries.Point(x, y);
+            _viewport.SetResolution(resolution);
+            _viewport.SetCenter(x, y);
 
             _toResolution = resolution; // for animation
 
-            _map.RefreshData(true);
-            OnViewChanged(true);
+            RefreshData();
             RefreshGraphics();
             ClearBBoxDrawing();
         }
 
         private void ClearBBoxDrawing()
         {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                _selectRectangle.Visibility = Visibility.Collapsed;
-            }));
+            RunOnUIThread(() => _selectRectangle.Visibility = Visibility.Collapsed);
         }
 
         private void DrawBbox(Point newPos)
@@ -633,13 +477,8 @@ namespace Mapsui.UI.Wpf
             }
         }
 
-        public void ZoomToFullEnvelope()
-        {
-            if (Map.Envelope == null) return;
-            if (ActualWidth.IsNanOrZero()) return;
-            Map.Viewport.Resolution = Math.Max(Map.Envelope.Width / ActualWidth, Map.Envelope.Height / ActualHeight);
-            Map.Viewport.Center = Map.Envelope.GetCentroid();
-        }
+        private float ViewportWidth => (float)ActualWidth;
+        private float ViewportHeight => (float) ActualHeight;
 
         private static void OnManipulationInertiaStarting(object sender, ManipulationInertiaStartingEventArgs e)
         {
@@ -676,23 +515,22 @@ namespace Mapsui.UI.Wpf
                 else if (_innerRotation < -180)
                     _innerRotation += 360;
 
-                if (_map.Viewport.Rotation == 0 && Math.Abs(_innerRotation) >= Math.Abs(UnSnapRotationDegrees))
+                if (Viewport.Rotation == 0 && Math.Abs(_innerRotation) >= Math.Abs(UnSnapRotationDegrees))
                     rotationDelta = _innerRotation;
-                else if (_map.Viewport.Rotation != 0)
+                else if (Viewport.Rotation != 0)
                 {
                     if (Math.Abs(_innerRotation) <= Math.Abs(ReSnapRotationDegrees))
-                        rotationDelta = -_map.Viewport.Rotation;
+                        rotationDelta = -Viewport.Rotation;
                     else
-                        rotationDelta = _innerRotation - _map.Viewport.Rotation;
+                        rotationDelta = _innerRotation - Viewport.Rotation;
                 }
             }
 
-            _map.Viewport.Transform(center.X, center.Y, prevCenter.X, prevCenter.Y, radius / prevRadius, rotationDelta);
+            _viewport.Transform(center.X, center.Y, prevCenter.X, prevCenter.Y, radius / prevRadius, rotationDelta);
 
-            ViewportLimiter.Limit(_map.Viewport, _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                _map.PanMode, _map.PanLimits, _map.Envelope);
+            ViewportLimiter.Limit(_viewport, _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions,
+                _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
 
-            OnViewChanged(true);
             e.Handled = true;
         }
 
@@ -711,21 +549,12 @@ namespace Mapsui.UI.Wpf
             Refresh();
         }
 
-        public MapInfo GetMapInfo(Geometries.Point screenPosition, int margin = 0)
-        {
-            return InfoHelper.GetMapInfo(Map.Viewport, screenPosition, 1, Map.InfoLayers, Renderer.SymbolCache, margin);
-        }
-
         private void SKElementOnPaintSurface(object sender, SKPaintSurfaceEventArgs args)
         {
             if (Renderer == null) return;
             if (_map == null) return;
 
-            Debug.WriteLine(DateTime.Now.Ticks);
-            TryInitializeViewport();
-            if (!_map.Viewport.Initialized) return;
-
-            Renderer.Render(args.Surface.Canvas, Map.Viewport, Map.Layers, Map.Widgets, Map.BackColor);
+            Renderer.Render(args.Surface.Canvas, Viewport, Map.Layers, Map.Widgets, Map.BackColor);
         }
         
         private void PaintWpf()
@@ -733,10 +562,7 @@ namespace Mapsui.UI.Wpf
             if (Renderer == null) return;
             if (_map == null) return;
 
-            TryInitializeViewport();
-            if (!_map.Viewport.Initialized) return;
-
-            Renderer.Render(WpfCanvas, Map.Viewport, _map.Layers, Map.Widgets, _map.BackColor);
+            Renderer.Render(WpfCanvas, Viewport, _map.Layers, Map.Widgets, _map.BackColor);
         }
     }
 }

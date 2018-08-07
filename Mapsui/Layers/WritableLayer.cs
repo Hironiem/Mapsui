@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using ConcurrentCollections;
 using Mapsui.Fetcher;
 using Mapsui.Geometries;
@@ -20,7 +19,7 @@ namespace Mapsui.Layers
             if (box == null) { return new List<IFeature>(); }
             var cache = _cache;
             var biggerBox = box.Grow(SymbolStyle.DefaultWidth * 2 * resolution, SymbolStyle.DefaultHeight * 2 * resolution);
-            var result = cache.Where(f => biggerBox.Intersects(f.Geometry.GetBoundingBox()));
+            var result = cache.Where(f => biggerBox.Intersects(f.Geometry.BoundingBox));
             return result;
         }
 
@@ -30,31 +29,20 @@ namespace Mapsui.Layers
             var cache = _cache.ToList();
             if (!cache.Any()) return null;
           
-            var minX = cache.Min(b => b.Geometry.GetBoundingBox().MinX);
-            var minY = cache.Min(b => b.Geometry.GetBoundingBox().MinY);
-            var maxX = cache.Max(b => b.Geometry.GetBoundingBox().MaxX);
-            var maxY = cache.Max(b => b.Geometry.GetBoundingBox().MaxY);
+            var minX = cache.Min(b => b.Geometry.BoundingBox.MinX);
+            var minY = cache.Min(b => b.Geometry.BoundingBox.MinY);
+            var maxX = cache.Max(b => b.Geometry.BoundingBox.MaxX);
+            var maxY = cache.Max(b => b.Geometry.BoundingBox.MaxY);
             return new BoundingBox(minX, minY, maxX, maxY);
         }
 
         public override BoundingBox Envelope => GetExtents();
 
-        public override void AbortFetch()
-        {
-            // do nothing. This is not an async layer
-        }
-
-        public override void ViewChanged(bool majorChange, BoundingBox extent, double resolution)
+        public override void RefreshData(BoundingBox extent, double resolution, bool majorChange)
         {
             //The MemoryLayer always has it's data ready so can fire a DataChanged event immediately so that listeners can act on it.
-            Task.Run(() => OnDataChanged(new DataChangedEventArgs()));
+            OnDataChanged(new DataChangedEventArgs());
         }
-
-        public override void ClearCache()
-        {
-            // do nothing. This is not an async layer
-        }
-
         public IEnumerable<IFeature> GetFeatures()
         {
             return _cache;
