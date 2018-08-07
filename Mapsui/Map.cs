@@ -37,6 +37,8 @@ namespace Mapsui
     /// </remarks>
     public class Map : INotifyPropertyChanged, IMap
     {
+	    public const string DefaultCRS = "EPSG:3857";
+	
         private LayerCollection _layers = new LayerCollection();
         private Color _backColor = Color.White;
 
@@ -59,12 +61,12 @@ namespace Mapsui
         /// <summary>
         /// Projection type of Map. Normally in format like "EPSG:3857"
         /// </summary>
-        public string CRS { get; set; }
+        public string CRS { get; set; } = DefaultCRS;
 
         /// <summary>
         /// Transformation to use for the different coordinate systems
         /// </summary>
-        public ITransformation Transformation { get; set; }
+        public ITransformation Transformation { get; set; } = new MinimalTransformation();
 
         /// <summary>
         /// A collection of layers. The first layer in the list is drawn first, the last one on top.
@@ -119,7 +121,12 @@ namespace Mapsui
                 BoundingBox bbox = null;
                 foreach (var layer in _layers)
                 {
-                    bbox = bbox == null ? layer.Envelope : bbox.Join(layer.Envelope);
+                    if (layer.CRS == CRS || (bool)Transformation.IsProjectionSupported(layer.CRS, CRS))
+                    {
+                        var layerEnvelope = (layer.CRS == CRS || layer.Envelope == null ? layer.Envelope : Transformation.Transform(layer.CRS, CRS, layer.Envelope));
+
+                        bbox = bbox == null ? layerEnvelope : bbox.Join(layerEnvelope);
+                    }
                 }
                 return bbox;
             }
@@ -190,8 +197,11 @@ namespace Mapsui
             layer.DataChanged += LayerDataChanged;
             layer.PropertyChanged += LayerPropertyChanged;
 
-            layer.Transformation = Transformation;
-            layer.CRS = CRS;
+            if (layer.Transformation == null)
+                layer.Transformation = Transformation;
+            if (layer.CRS == null)
+                layer.CRS = CRS;
+
             Resolutions = DetermineResolutions(Layers);
             OnPropertyChanged(nameof(Layers));
         }
