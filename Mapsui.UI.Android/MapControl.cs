@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using Android.Content;
 using Android.Graphics;
 using Android.OS;
@@ -34,7 +30,7 @@ namespace Mapsui.UI.Android
         /// Saver for center before last pinch movement
         /// </summary>
         private Point _previousCenter = new Point();
-		private IFeature _draggedFeature;
+        private IFeature _draggedFeature;
 
         public MapControl(Context context, IAttributeSet attrs) :
             base(context, attrs)
@@ -79,14 +75,14 @@ namespace Mapsui.UI.Android
         private void OnDoubleTapped(object sender, GestureDetector.DoubleTapEventArgs e)
         {
             var position = GetScreenPosition(e.Event, this);
-            OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport, 
+            OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport,
                 position, position, Renderer.SymbolCache, WidgetTouched, 2));
         }
 
         private void OnSingleTapped(object sender, GestureDetector.SingleTapConfirmedEventArgs e)
         {
             var position = GetScreenPosition(e.Event, this);
-            OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport, 
+            OnInfo(InvokeInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Map.Widgets, Viewport,
                 position, position, Renderer.SymbolCache, WidgetTouched, 1));
         }
 
@@ -111,7 +107,7 @@ namespace Mapsui.UI.Android
             Renderer.Render(args.Surface.Canvas, Viewport, _map.Layers, _map.Widgets, _map.BackColor);
         }
 
-private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
+        private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
         {
             var mapInfoEventArgs = new MapInfoEventArgs
             {
@@ -158,7 +154,7 @@ private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
             _draggedFeature = null;
         }
 
-       public void MapView_Touch(object sender, TouchEventArgs args)
+        public void MapView_Touch(object sender, TouchEventArgs args)
         {
             try
             {
@@ -259,7 +255,7 @@ private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
                                 {
                                     _viewport.Transform(touchPosition.X, touchPosition.Y, _previousCenter.X, _previousCenter.Y);
 
-                                    ViewportLimiter.LimitExtent(_viewport, _map.PanMode, _map.PanLimits, _map.Envelope);
+                                    ViewportLimiter.LimitExtent(_viewport, _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
 
                                     RefreshGraphics();
                                 }
@@ -302,8 +298,8 @@ private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
                                 (_previousCenter, _previousRadius, _previousAngle) = (center, radius, angle);
 
                                 ViewportLimiter.Limit(_viewport,
-                                    _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
-                                    _map.PanMode, _map.PanLimits, _map.Envelope);
+                                    _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions,
+                                    _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
 
                                 RefreshGraphics();
                             }

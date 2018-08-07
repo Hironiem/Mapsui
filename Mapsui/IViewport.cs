@@ -16,11 +16,13 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 using Mapsui.Geometries;
+using System.ComponentModel;
 
 namespace Mapsui
 {
     public interface IViewport : IReadOnlyViewport
     {
+        event PropertyChangedEventHandler ViewportChanged;
         void SetCenter(double x, double y);
         void SetCenter(ReadOnlyPoint center);
         void SetResolution(double resolution);
@@ -36,7 +38,7 @@ namespace Mapsui
         /// <param name="previousScreenY">Old Y position of point</param>
         /// <param name="deltaScale">Change of resolution for transformation (&lt;1: zoom out, >1: zoom in)</param>
         /// <param name="deltaRotation">Change of rotation</param>
-        void Transform(double screenX, double screenY, double previousScreenX, double previousScreenY, 
+        void Transform(double screenX, double screenY, double previousScreenX, double previousScreenY,
             double deltaScale = 1, double deltaRotation = 0);
     }
 }
