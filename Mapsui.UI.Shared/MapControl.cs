@@ -1,4 +1,4 @@
-﻿using Mapsui.Geometries;
+using Mapsui.Geometries;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -284,7 +284,8 @@ namespace Mapsui.UI.Wpf
                 return new MapInfoEventArgs
                 {
                     MapInfo = mapInfo,
-                    NumTaps = numTaps,
+					NumTaps = numTaps,
+                    Type = numTaps == 1 ? MapInfoEventType.SingleTap : MapInfoEventType.DoubleTap,
                     Handled = false
                 };
             }

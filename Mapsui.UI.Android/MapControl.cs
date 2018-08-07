@@ -9,7 +9,13 @@ using Android.Util;
 using Android.Views;
 using Mapsui.Geometries.Utilities;
 using Mapsui.Logging;
+using Mapsui.Providers;
 using SkiaSharp.Views.Android;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Threading;
 using Math = System.Math;
 using Point = Mapsui.Geometries.Point;
 
@@ -28,6 +34,7 @@ namespace Mapsui.UI.Android
         /// Saver for center before last pinch movement
         /// </summary>
         private Point _previousCenter = new Point();
+		private IFeature _draggedFeature;
 
         public MapControl(Context context, IAttributeSet attrs) :
             base(context, attrs)
@@ -97,16 +104,81 @@ namespace Mapsui.UI.Android
             Renderer.Render(args.Surface.Canvas, Viewport, _map.Layers, _map.Widgets, _map.BackColor);
         }
 
-        public void MapView_Touch(object sender, TouchEventArgs args)
+private MapInfoEventArgs CheckStartDragHandled(MotionEvent motionEvent)
         {
-            if (_gestureDetector.OnTouchEvent(args.Event))
-                return;
+            var mapInfoEventArgs = new MapInfoEventArgs
+            {
+                MapInfo = MapInfoHelper.GetMapInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Viewport, GetScreenPosition(motionEvent, this), Renderer.SymbolCache),
+                Type = MapInfoEventType.DragStart,
+                Handled = false
+            };
+
+            if (mapInfoEventArgs.MapInfo.Feature != null)
+            {
+                OnInfo(mapInfoEventArgs);
+            }
+
+            return mapInfoEventArgs;
+        }
+
+        private void DragFeatureTo(MotionEvent motionEvent)
+        {
+            var mapInfoEventArgs = new MapInfoEventArgs
+            {
+                MapInfo = MapInfoHelper.GetMapInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Viewport, GetScreenPosition(motionEvent, this), Renderer.SymbolCache),
+                Type = MapInfoEventType.DragMove,
+                Handled = false
+            };
+
+            mapInfoEventArgs.MapInfo.Feature = _draggedFeature;
+
+            OnInfo(mapInfoEventArgs);
+        }
+
+        private void StopFeatureDrag(MotionEvent motionEvent)
+        {
+            var mapInfoEventArgs = new MapInfoEventArgs
+            {
+                MapInfo = MapInfoHelper.GetMapInfo(Map.Layers.Where(l => l.IsMapInfoLayer), Viewport, GetScreenPosition(motionEvent, this), Renderer.SymbolCache),
+                Type = MapInfoEventType.DragStop,
+                Handled = false
+            };
+
+            mapInfoEventArgs.MapInfo.Feature = _draggedFeature;
+
+            OnInfo(mapInfoEventArgs);
+
+            _draggedFeature = null;
+        }
+
+       public void MapView_Touch(object sender, TouchEventArgs args)
+        {
+            try
+            {
+                if (_gestureDetector.OnTouchEvent(args.Event))
+                    return;
+            }
+            catch (ObjectDisposedException e)
+            {
+                System.Diagnostics.Debug.WriteLine(e.Message);
+
+                _gestureDetector = new GestureDetector(Context, new GestureDetector.SimpleOnGestureListener());
+                _gestureDetector.SingleTapConfirmed += OnSingleTapped;
+                _gestureDetector.DoubleTap += OnDoubleTapped;
+
+                Invalidate();
+            }
 
             var touchPoints = GetScreenPositions(args.Event, this);
 
             switch (args.Event.Action)
             {
                 case MotionEventActions.Up:
+                    if (_mode == TouchMode.FeatureDrag)
+                    {
+                        StopFeatureDrag(args.Event);
+                    }
+
                     RefreshGraphics();
                     _mode = TouchMode.None;
                     RefreshData();
@@ -115,40 +187,61 @@ namespace Mapsui.UI.Android
                 case MotionEventActions.Pointer1Down:
                 case MotionEventActions.Pointer2Down:
                 case MotionEventActions.Pointer3Down:
-                    if (touchPoints.Count >= 2)
+                    if (_mode != TouchMode.FeatureDrag)
                     {
-                        (_previousCenter, _previousRadius, _previousAngle) = GetPinchValues(touchPoints);
-                        _mode = TouchMode.Zooming;
-                        _innerRotation = Viewport.Rotation;
-                    }
-                    else
-                    {
-                        _mode = TouchMode.Dragging;
-                        _previousCenter = touchPoints.First();
+                        if (touchPoints.Count >= 2)
+                        {
+                            (_previousCenter, _previousRadius, _previousAngle) = GetPinchValues(touchPoints);
+                            _mode = TouchMode.Zooming;
+                            _innerRotation = Viewport.Rotation;
+                        }
+                        else
+                        {
+                            var mapInfoArgs = CheckStartDragHandled(args.Event);
+
+                            if (mapInfoArgs.Handled)
+                            {
+                                System.Diagnostics.Debug.WriteLine("Drag consumed!!");
+                                _draggedFeature = mapInfoArgs.MapInfo.Feature;
+
+                                _mode = TouchMode.FeatureDrag;
+                            }
+                            else
+                            {
+                                _mode = TouchMode.Dragging;
+                                _previousCenter = touchPoints.First();
+                            }
+                        }
                     }
                     break;
                 case MotionEventActions.Pointer1Up:
                 case MotionEventActions.Pointer2Up:
                 case MotionEventActions.Pointer3Up:
-                    // Remove the touchPoint that was released from the locations to reset the
-                    // starting points of the move and rotation
-                    touchPoints.RemoveAt(args.Event.ActionIndex);
+                    if (_mode != TouchMode.FeatureDrag)
+                    {
+                        // Remove the touchPoint that was released from the locations to reset the
+                        // starting points of the move and rotation
+                        touchPoints.RemoveAt(args.Event.ActionIndex);
 
-                    if (touchPoints.Count >= 2)
-                    {
-                        (_previousCenter, _previousRadius, _previousAngle) = GetPinchValues(touchPoints);
-                        _mode = TouchMode.Zooming;
-                        _innerRotation = Viewport.Rotation;
-                    }
-                    else
-                    {
-                        _mode = TouchMode.Dragging;
-                        _previousCenter = touchPoints.First();
+                        if (touchPoints.Count >= 2)
+                        {
+                            (_previousCenter, _previousRadius, _previousAngle) = GetPinchValues(touchPoints);
+                            _mode = TouchMode.Zooming;
+                            _innerRotation = Viewport.Rotation;
+                        }
+                        else
+                        {
+                            _mode = TouchMode.Dragging;
+                            _previousCenter = touchPoints.First();
+                        }
                     }
                     break;
                 case MotionEventActions.Move:
                     switch (_mode)
                     {
+                        case TouchMode.FeatureDrag:
+                            DragFeatureTo(args.Event);
+                            break;
                         case TouchMode.Dragging:
                             {
                                 if (touchPoints.Count != 1)
@@ -159,7 +252,7 @@ namespace Mapsui.UI.Android
                                 {
                                     _viewport.Transform(touchPosition.X, touchPosition.Y, _previousCenter.X, _previousCenter.Y);
 
-                                    ViewportLimiter.LimitExtent(_viewport, _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
+                                    ViewportLimiter.LimitExtent(_viewport, _map.PanMode, _map.PanLimits, _map.Envelope);
 
                                     RefreshGraphics();
                                 }
@@ -202,8 +295,8 @@ namespace Mapsui.UI.Android
                                 (_previousCenter, _previousRadius, _previousAngle) = (center, radius, angle);
 
                                 ViewportLimiter.Limit(_viewport,
-                                    _map.Limits.ZoomMode, _map.Limits.ZoomLimits, _map.Resolutions,
-                                    _map.Limits.PanMode, _map.Limits.PanLimits, _map.Envelope);
+                                    _map.ZoomMode, _map.ZoomLimits, _map.Resolutions,
+                                    _map.PanMode, _map.PanLimits, _map.Envelope);
 
                                 RefreshGraphics();
                             }

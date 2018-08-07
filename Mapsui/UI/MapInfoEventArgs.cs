@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Mapsui.UI
 {
@@ -10,6 +10,10 @@ namespace Mapsui.UI
         /// Number of times the user tapped the location
         /// </summary>
         public int NumTaps { get; set; }
+	    /// <summary>
+        /// Type of touch related to this event
+        /// </summary>
+        public MapInfoEventType Type { get; set; }
         /// <summary>
         /// If the interaction was handled by the event subscriber
         /// </summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Mapsui.Geometries;
 using Mapsui.Layers;
@@ -11,6 +11,7 @@ namespace Mapsui.UI
         Map Map { get; set; }
 
         event EventHandler ViewportInitialized;
+		event EventHandler<MapInfoEventArgs> Info;
 
         void RefreshGraphics();
 
