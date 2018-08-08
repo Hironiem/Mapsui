@@ -1,12 +1,13 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Mapsui.Geometries;
+﻿using Mapsui.Geometries;
 using Mapsui.Layers;
 using Mapsui.Logging;
 using Mapsui.Providers;
 using Mapsui.Rendering;
 using Mapsui.Styles;
 using Mapsui.Styles.Thematics;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Mapsui.UI
 {
@@ -41,7 +42,7 @@ namespace Mapsui.UI
 
                 var features = layer.GetFeaturesInView(layer.Envelope, resolution);
 
-                var feature = features.LastOrDefault(f => 
+                var feature = features.LastOrDefault(f =>
                     IsTouchingTakingIntoAccountSymbolStyles(worldPosition, f, layer.Style, resolution, symbolCache, margin));
 
                 if (feature != null)
@@ -65,7 +66,7 @@ namespace Mapsui.UI
             };
         }
 
-        private static bool IsTouchingTakingIntoAccountSymbolStyles(Point point, IFeature feature, IStyle layerStyle, 
+        private static bool IsTouchingTakingIntoAccountSymbolStyles(Point point, IFeature feature, IStyle layerStyle,
             double resolution, ISymbolCache symbolCache, int margin = 0)
         {
             var styles = new List<IStyle>();
@@ -111,6 +112,10 @@ namespace Mapsui.UI
                         var box = feature.Geometry.BoundingBox;
                         box = box.Grow(marginX, marginY);
                         if (box.Distance(point) <= marginInWorldUnits) return true;
+                    }
+                    else if (localStyle == null)
+                    {
+                        Logger.Log(LogLevel.Warning, $"Feature info with a null style: {String.Join("-", feature.Fields.Select(f => $"[{f}:{feature[f].ToString()}]"))}");
                     }
                     else
                     {
