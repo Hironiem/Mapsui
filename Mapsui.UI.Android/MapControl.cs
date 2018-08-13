@@ -364,6 +364,14 @@ namespace Mapsui.UI.Android
                 Invalidate();
                 _canvas?.Invalidate();
             }
+            catch (AggregateException ae)
+            {
+                ae.Handle(x =>
+                {
+                    Logger.Log(LogLevel.Warning, "Exception thrown in UI thread called from background thread.", x);
+                    return true;
+                });
+            }
             catch (ObjectDisposedException e)
             {
                 // See issue: https://github.com/Mapsui/Mapsui/issues/433
