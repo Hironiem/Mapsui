@@ -17,8 +17,8 @@ namespace Mapsui.Projection
         {
             _toLonLat["EPSG:4326"] = (x, y) => new Point(x, y);
             _fromLonLat["EPSG:4326"] = (x, y) => new Point(x, y);
-			_toLonLat["EPSG:4326:R"] = (x, y) => new Point(y, x);
-            _fromLonLat["EPSG:4326:R"] = (x, y) => new Point(y, x);
+            _toLonLat["CRS:84"] = (x, y) => new Point(y, x);
+            _fromLonLat["CRS:84"] = (x, y) => new Point(y, x);
             _toLonLat["EPSG:3857"] = SphericalMercator.ToLonLat;
             _fromLonLat["EPSG:3857"] = SphericalMercator.FromLonLat;
         }
